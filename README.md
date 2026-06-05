@@ -2,6 +2,9 @@
 
 Real-time financial news tracker running on AWS EC2.
 
+## Why This Exists
+Retail traders in Indonesia lack real-time tools to gauge market sentiment. This project automates news ingestion and sentiment classification to help traders make data-driven decisions.
+
 ## Tech Stack
 - **Flask** — REST API & RSS data collector
 - **PostgreSQL** — Data storage
@@ -21,6 +24,15 @@ AWS EC2
 ↓
 Prometheus + Grafana
 
+## Sentiment Classification
+News articles are automatically classified into 4 categories:
+| Label | Trigger |
+|-------|---------|
+| 🔴 Panic | Crisis, crash, collapse keywords |
+| 😨 Fear | Decline, risk, warning keywords |
+| 🟡 Hope | Recovery, growth, positive outlook |
+| 🟢 Greed | Rally, surge, bullish keywords |
+
 ## API Endpoints
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -38,3 +50,9 @@ Prometheus + Grafana
 ## Deployment
 App is live on AWS EC2 with automated CI/CD pipeline.
 Every push to master triggers automatic deployment.
+
+## Roadmap
+- [ ] Dashboard UI for sentiment visualization
+- [ ] Per-ticker (emiten) sentiment scoring
+- [ ] Telegram bot integration for real-time alerts
+- [ ] Subscription API for traders
