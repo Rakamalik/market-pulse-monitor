@@ -1,10 +1,10 @@
+
 # =========================
 # 1. IMPORT
 # =========================
 from flask import Flask, jsonify
 import feedparser
 import psycopg2
-import time
 
 # =========================
 # 2. INIT APP
@@ -26,17 +26,22 @@ DB_CONFIG = {
 # =========================
 def analyze_sentiment(text):
     text = text.lower()
-    fear_words = ["crash", "turun", "jual", "anjlok", "drop", "fall", "decline", "bearish", "loss", "sell", "melemah", "tertekan", "koreksi", "terpuruk", "jeblok"]
-    greed_words = ["naik", "profit", "beli", "rally", "surge", "gain", "bullish", "buy", "high", "menguat", "melonjak", "rekor", "optimis", "terbang"]
-    hope_words = ["stabil", "recover", "rebound", "stable", "positive", "growth", "potential", "pulih", "harapan", "prospek", "potensi"]
-    panic_words = ["kolaps", "bangkrut", "panik", "crash", "collapse", "bankrupt", "panic", "crisis", "plunge", "hancur", "ambruk", "krisis", "terjun"]
+    
+    fear_words = ["crash", "turun", "jual", "anjlok", "drop", "fall", "decline", "bearish", "loss", "sell"]
+    greed_words = ["naik", "profit", "beli", "rally", "surge", "gain", "bullish", "buy", "moon", "high"]
+    hope_words = ["stabil", "optimis", "recover", "rebound", "stable", "positive", "growth", "potential"]
+    panic_words = ["kolaps", "bangkrut", "panik", "crash", "collapse", "bankrupt", "panic", "crisis", "plunge"]
+
     scores = {
         "Fear": sum(1 for w in fear_words if w in text),
         "Greed": sum(1 for w in greed_words if w in text),
         "Hope": sum(1 for w in hope_words if w in text),
         "Panic": sum(1 for w in panic_words if w in text)
     }
+    
     return max(scores, key=scores.get) if any(scores.values()) else "Neutral"
+
+import time
 
 def get_db_connection():
     retries = 5
@@ -69,78 +74,67 @@ def create_table():
 # 4. ROUTES
 # =========================
 
+# Health check
 @app.route("/health")
 def health():
     return {"status": "ok"}
 
+# Home
 @app.route("/")
 def home():
     return "DevOps App Running 🚀"
 
+# Fetch RSS → save to DB
 @app.route("/fetch")
 def fetch_rss():
-    url = "https://www.cnbcindonesia.com/rss"
+    url = "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
     feed = feedparser.parse(url)
+
     conn = get_db_connection()
     cur = conn.cursor()
+
     for entry in feed.entries[:5]:
-        sentiment = analyze_sentiment(entry.title)
         cur.execute(
-            "INSERT INTO articles (title, link, sentiment) VALUES (%s, %s, %s)",
-            (entry.title, entry.link, sentiment)
+            "INSERT INTO articles (title, link) VALUES (%s, %s)",
+            (entry.title, entry.link)
         )
+
     conn.commit()
     cur.close()
     conn.close()
+
     return {"message": "Data saved to database 🚀"}
 
+# Get data from DB
 @app.route("/data")
 def get_data():
     conn = get_db_connection()
     cur = conn.cursor()
+
     cur.execute("""
-        SELECT title, link, sentiment
-        FROM articles
-        ORDER BY id DESC
+        SELECT title, link 
+        FROM articles 
+        ORDER BY id DESC 
         LIMIT 10;
     """)
+
     rows = cur.fetchall()
+
     cur.close()
     conn.close()
+
     result = []
     for row in rows:
         result.append({
             "title": row[0],
-            "link": row[1],
-            "sentiment": row[2]
+            "link": row[1]
         })
-    return jsonify(result)
 
-@app.route("/sentiment")
-def get_sentiment():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT sentiment, COUNT(*) as total
-        FROM articles
-        WHERE sentiment IS NOT NULL
-        GROUP BY sentiment
-        ORDER BY total DESC;
-    """)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    result = []
-    for row in rows:
-        result.append({
-            "sentiment": row[0],
-            "total": row[1]
-        })
     return jsonify(result)
 
 # =========================
 # 5. RUN APP
 # =========================
 if __name__ == "__main__":
-    create_table()
+    create_table()  # auto create table
     app.run(host="0.0.0.0", port=5000)
