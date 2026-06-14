@@ -1,58 +1,101 @@
-# Market Pulse Monitor
+# Market Pulse Monitor 📊
 
-Real-time financial news tracker running on AWS EC2.
+Real-time financial market sentiment tracker for Indonesian market — deployed on AWS EC2.
 
-## Why This Exists
-Retail traders in Indonesia lack real-time tools to gauge market sentiment. This project automates news ingestion and sentiment classification to help traders make data-driven decisions.
+Mengukur psikologi pasar keuangan Indonesia berdasarkan berita real-time, dengan distribusi otomatis ke Telegram.
+
+## How It Works
+8 RSS Sumber Berita Indonesia
+
+↓
+
+Flask App — fetch & analyze sentiment
+
+↓
+
+PostgreSQL — historical storage
+
+↓
+
+Sentiment Classification (Fear/Greed/Hope/Panic/Neutral)
+
+↓
+
+Telegram Bot — auto notification
+
+↓
+
+Ready-to-post content for X
+
+## Sentiment Classification
+| Label | Artinya |
+|---|---|
+| 🔴 Fear | Pasar takut, tekanan jual |
+| 🟢 Greed | Pasar serakah, tekanan beli |
+| 🟡 Hope | Pasar optimis, menunggu |
+| ⚫ Panic | Pasar panik, aksi jual masif |
+| ⚪ Neutral | Pasar netral |
 
 ## Tech Stack
 - **Flask** — REST API & RSS data collector
-- **PostgreSQL** — Data storage
+- **PostgreSQL** — Historical data storage
 - **Docker & Docker Compose** — Containerization
-- **GitHub Actions** — CI/CD pipeline
-- **Prometheus & Grafana** — Monitoring
-- **AWS EC2** — Cloud deployment
+- **GitHub Actions** — CI/CD auto-deploy pipeline
+- **Prometheus & Grafana** — System monitoring
+- **AWS EC2** — Cloud production server
+- **Telegram Bot API** — Automated content distribution
 
-## Architecture
-RSS Feed → Flask App → PostgreSQL → API Endpoints
-↓
-Docker Compose
-↓
-GitHub Actions (CI/CD)
-↓
-AWS EC2
-↓
-Prometheus + Grafana
-
-## Sentiment Classification
-News articles are automatically classified into 4 categories:
-| Label | Trigger |
-|-------|---------|
-| 🔴 Panic | Crisis, crash, collapse keywords |
-| 😨 Fear | Decline, risk, warning keywords |
-| 🟡 Hope | Recovery, growth, positive outlook |
-| 🟢 Greed | Rally, surge, bullish keywords |
+## RSS Sources
+CNBC Indonesia, Bisnis.com, Kontan, Detik Finance, IDX Channel, Investor Daily, Katadata, Republika Ekonomi
 
 ## API Endpoints
 | Endpoint | Method | Description |
-|----------|--------|-------------|
-| /health | GET | Health check |
-| /fetch | GET | Fetch & store RSS articles |
-| /data | GET | Retrieve stored articles |
+|---|---|---|
+| /health | GET | System health check |
+| /fetch | GET | Fetch & analyze latest news from 8 sources |
+| /data | GET | Get articles with sentiment |
+| /sentiment | GET | Sentiment summary report |
+| /notify | GET | Send formatted sentiment report + X draft to Telegram |
 
 ## Features
-- Automated RSS ingestion from financial news sources
-- Persistent storage with PostgreSQL
-- Containerized with Docker Compose
-- Auto-deploy on every push via GitHub Actions
-- System monitoring with Prometheus & Grafana
+- Bilingual sentiment analysis (Indonesian + English)
+- Multi-source RSS ingestion with error handling
+- Persistent PostgreSQL storage
+- Docker Compose orchestration
+- Auto-deploy on every GitHub push (CI/CD)
+- Telegram bot for daily market sentiment summary
+- Auto-generated, character-optimized content ready for X/Twitter
+- Real-time monitoring with Prometheus & Grafana
 
-## Deployment
-App is live on AWS EC2 with automated CI/CD pipeline.
-Every push to master triggers automatic deployment.
+## Sample Output (Telegram)
+📊 Market Pulse Monitor
+
+🗓 13 Jun 2026
+━━━━━━━━━━━━━━━
+
+DOMINANT: 🟢 GREED
+
+━━━━━━━━━━━━━━━
+🟢 Greed   : 8 berita (32%)
+
+⚪ Neutral : 12 berita (48%)
+
+🔴 Fear    : 5 berita (20%)
+📌 Interpretasi:
+
+Pasar sedang euforia. Waspadai FOMO.
+📰 Headline Terkini:
+
+Harga Emas Hari Ini Melonjak...
 
 ## Roadmap
-- [ ] Dashboard UI for sentiment visualization
-- [ ] Per-ticker (emiten) sentiment scoring
-- [ ] Telegram bot integration for real-time alerts
-- [ ] Subscription API for traders
+- [x] Sentiment analysis (Fear/Greed/Hope/Panic/Neutral)
+- [x] Multi-source RSS (8 sumber Indonesia)
+- [x] Telegram bot integration
+- [ ] Scheduled cron job for daily auto-notification
+- [ ] Web dashboard for sentiment history
+- [ ] LLM integration for deeper analysis
+
+## Contact
+- GitHub: github.com/Rakamalik
+- LinkedIn: linkedin.com/in/imam-raka-putra-2aa603339
