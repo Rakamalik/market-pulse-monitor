@@ -1,6 +1,7 @@
 # =========================
 # 1. IMPORT
 # =========================
+from google import genai as google_genai
 from flask import Flask, jsonify
 import feedparser
 import psycopg2
@@ -39,6 +40,22 @@ def analyze_sentiment(text):
         "Panic": sum(1 for w in panic_words if w in text)
     }
     return max(scores, key=scores.get) if any(scores.values()) else "Neutral"
+
+def analyze_sentiment_ai(text):
+    try:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        client = google_genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f'Klasifikasikan sentiment berita keuangan Indonesia ini: Fear/Greed/Hope/Panic/Neutral. Jawab 1 kata saja.\n\nBerita: {text}'
+        )
+        result = response.text.strip()
+        if result in ["Fear", "Greed", "Hope", "Panic", "Neutral"]:
+            return result
+        return "Neutral"
+    except Exception as e:
+        print(f"Gemini error: {e}")
+        return analyze_sentiment(text)
 
 def get_db_connection():
     retries = 5
@@ -100,7 +117,7 @@ def fetch_rss():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries[:5]:
-                sentiment = analyze_sentiment(entry.title)
+                sentiment = analyze_sentiment_ai(entry.title)
                 cur.execute(
                     "INSERT INTO articles (title, link, sentiment) VALUES (%s, %s, %s)",
                     (entry.title, entry.link, sentiment)
