@@ -2,7 +2,7 @@
 # 1. IMPORT
 # =========================
 from google import genai as google_genai
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import feedparser
 import psycopg2
 import time
@@ -302,6 +302,40 @@ def notify_telegram():
 
     return {"message": "Notifications sent to Telegram ✅"}
 	
+
+@app.route("/ingest-ohlcv", methods=["POST"])
+def ingest_ohlcv():
+    data = request.get_json()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ohlcv (
+            id SERIAL PRIMARY KEY,
+            ticker TEXT,
+            date DATE,
+            open FLOAT,
+            high FLOAT,
+            low FLOAT,
+            close FLOAT,
+            volume BIGINT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+    """)
+    for row in data:
+        cur.execute("""
+            INSERT INTO ohlcv (ticker, date, open, high, low, close, volume)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ticker, date) DO UPDATE SET
+                close = EXCLUDED.close,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
+                volume = EXCLUDED.volume;
+        """, (row['ticker'], row['date'], row['open'], row['high'], row['low'], row['close'], row['volume']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"message": f"Saved {len(data)} rows"}
 # =========================
 # 5. RUN APP
 # =========================
