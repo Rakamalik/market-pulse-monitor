@@ -419,6 +419,59 @@ def rrg_chart():
     plt.close()
 
     return send_file(buf, mimetype='image/png')
+@app.route("/telegram-webhook", methods=["POST"])
+def telegram_webhook():
+    data = request.get_json()
+    
+    if not data or "message" not in data:
+        return {"ok": True}
+    
+    message = data["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
+    
+    token = os.environ.get("TELEGRAM_TOKEN")
+    tg_url = f"https://api.telegram.org/bot{token}"
+    
+    # Command /rrg BBCA BBRI BMRI
+    if text.startswith("/rrg"):
+        parts = text.split()
+        if len(parts) < 2:
+            requests.post(f"{tg_url}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "Usage: /rrg BBCA BBRI BMRI"
+            })
+            return {"ok": True}
+        
+        tickers = ",".join(parts[1:])
+        
+        # Generate chart
+        chart_response = requests.get(
+            f"http://localhost:5000/rrg?tickers={tickers}"
+        )
+        
+        if chart_response.status_code == 200:
+            requests.post(f"{tg_url}/sendPhoto", files={
+                "photo": ("rrg.png", chart_response.content, "image/png")
+            }, data={
+                "chat_id": chat_id,
+                "caption": f"📊 Psychological RRG\n{tickers}"
+            })
+        else:
+            requests.post(f"{tg_url}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"Error: {chart_response.json()}"
+            })
+    
+    elif text.startswith("/sentiment"):
+        # Kirim sentiment summary
+        requests.post(f"{tg_url}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": "Fetching sentiment..."
+        })
+        requests.get("http://localhost:5000/notify")
+    
+    return {"ok": True}
 # =========================
 # 5. RUN APP
 # =========================
