@@ -5,3 +5,6 @@ requests
 
 google-generativeai
 google-genai
+matplotlib
+pandas
+numpy

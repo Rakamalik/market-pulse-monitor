@@ -1,8 +1,15 @@
 # =========================
 # 1. IMPORT
 # =========================
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import io
+import sys
+sys.path.append('/home/ubuntu/market-pulse-monitor')
+from rrg_engine import calculate_rrg, get_data, BENCHMARK
 from google import genai as google_genai
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 import feedparser
 import psycopg2
 import time
@@ -134,7 +141,7 @@ def fetch_rss():
     return {"message": f"Saved {total_saved} articles from {len(rss_sources)} sources 🚀"}
 
 @app.route("/data")
-def get_data():
+def get_db_data():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -336,6 +343,82 @@ def ingest_ohlcv():
     cur.close()
     conn.close()
     return {"message": f"Saved {len(data)} rows"}
+@app.route("/rrg")
+def rrg_chart():
+    tickers = request.args.get('tickers', '').upper().split(',')
+    tickers = [t.strip() + '.JK' if not t.strip().endswith('.JK') and t.strip() != '^JKSE' else t.strip() for t in tickers if t.strip()]
+
+    if not tickers:
+        return {"error": "No tickers provided"}, 400
+
+    try:
+        benchmark_df = get_data(BENCHMARK)
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    ax.set_facecolor('#fafafa')
+    fig.patch.set_facecolor('white')
+
+    # Kuadran background
+    ax.axhspan(100, 130, xmin=0.5, xmax=1.0, alpha=0.08, color='green')
+    ax.axhspan(70, 100, xmin=0.5, xmax=1.0, alpha=0.08, color='orange')
+    ax.axhspan(100, 130, xmin=0.0, xmax=0.5, alpha=0.08, color='blue')
+    ax.axhspan(70, 100, xmin=0.0, xmax=0.5, alpha=0.08, color='red')
+
+    # Label kuadran
+    ax.text(115, 127, 'LEADING', fontsize=9, color='green', alpha=0.6, ha='center')
+    ax.text(85, 127, 'IMPROVING', fontsize=9, color='blue', alpha=0.6, ha='center')
+    ax.text(115, 73, 'WEAKENING', fontsize=9, color='orange', alpha=0.6, ha='center')
+    ax.text(85, 73, 'LAGGING', fontsize=9, color='red', alpha=0.6, ha='center')
+
+    # Garis tengah
+    ax.axhline(y=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax.axvline(x=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+
+    colors = ['#2a78d6','#1baf7a','#eda100','#e34948','#4a3aa7',
+              '#eb6834','#e87ba4','#008300','#BA7517','#185FA5',
+              '#3B6D11','#A32D2D','#534AB7','#0F6E56','#854F0B']
+
+    for i, ticker in enumerate(tickers):
+        try:
+            tail = calculate_rrg(ticker, benchmark_df)
+            if tail.empty:
+                continue
+            xs = tail['x'].tolist()
+            ys = tail['y'].tolist()
+            color = colors[i % len(colors)]
+            name = ticker.replace('.JK', '')
+
+            # Tail dengan transparansi
+            for j in range(len(xs)-1):
+                alpha = 0.2 + (j / len(xs)) * 0.7
+                ax.plot([xs[j], xs[j+1]], [ys[j], ys[j+1]],
+                       color=color, linewidth=1.5, alpha=alpha)
+
+            # Titik akhir
+            ax.scatter([xs[-1]], [ys[-1]], color=color, s=80,
+                      zorder=5, edgecolors='white', linewidths=1.5)
+            ax.annotate(name, (xs[-1], ys[-1]),
+                       textcoords="offset points", xytext=(6, 4),
+                       fontsize=8, color=color, fontweight='bold')
+        except Exception as e:
+            print(f"Error {ticker}: {e}")
+            continue
+
+    ax.set_xlim(70, 130)
+    ax.set_ylim(70, 130)
+    ax.set_xlabel('Logika Tren (X)', fontsize=11)
+    ax.set_ylabel('Intensitas Emosi (Y)', fontsize=11)
+    ax.set_title('Psychological RRG — Market Pulse Monitor', fontsize=13, pad=15)
+    ax.grid(True, alpha=0.2)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+    buf.seek(0)
+    plt.close()
+
+    return send_file(buf, mimetype='image/png')
 # =========================
 # 5. RUN APP
 # =========================
