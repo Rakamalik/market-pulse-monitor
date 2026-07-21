@@ -1,106 +1,87 @@
-# Market Pulse Monitor 📊
+# Market Pulse Monitor 2.0 📊
 
-Real-time financial market sentiment tracker for Indonesian market — deployed on AWS EC2.
+Real-time **Psychological Market Sentiment** tracker untuk pasar saham Indonesia.
+Satu-satunya sistem yang menggabungkan analisis psikologis berbasis AI dengan **Psychological RRG (Relative Rotation Graph)** untuk emiten LQ45.
 
-Mengukur psikologi pasar keuangan Indonesia berdasarkan berita real-time, dengan distribusi otomatis ke Telegram.
+## What's New in 2.0
+- 🧠 **AI Sentiment** via Gemini — bukan keyword matching
+- 📈 **Psychological RRG Engine** — peta rotasi psikis trader
+- 🤖 **Telegram Bot** — `/rrg BBCA BBRI` langsung kirim chart
+- 📊 **LQ45 Coverage** — 53 emiten + IHSG + LQ45 Index
 
-## How It Works
-8 RSS Sumber Berita Indonesia
+## Psychological RRG
+Sistem ini memvisualisasikan **kondisi psikologis** emiten dalam 4 kuadran:
 
+| Kuadran | Kondisi | Signal |
+|---|---|---|
+| LEADING (kanan atas) | Greed/FOMO | Ride the trend |
+| WEAKENING (kanan bawah) | Fear/Profit Taking | Trailing stop |
+| IMPROVING (kiri atas) | Hope/Akumulasi | Watchlist |
+| LAGGING (kiri bawah) | Panic/Despair | No touch |
+
+### Formula
+Sumbu X (Logika Tren):
+X = Z-Score(EMA(Close_emiten / Close_IHSG, 14)) × 10 + 100
+
+Sumbu Y (Intensitas Emosi):
+RVol = Volume / SMA(Volume, 20)
+ATR_ROC = (ATR_t - ATR_t-5) / ATR_t-5
+Y = Z-Score(RVol × ATR_ROC) × 10 + 100
+
+## Architecture
+LAPTOP (Windows)
+push_ohlcv.py (daily 16:00)
 ↓
-
-Flask App — fetch & analyze sentiment
-
-↓
-
-PostgreSQL — historical storage
-
-↓
-
-Sentiment Classification (Fear/Greed/Hope/Panic/Neutral)
-
-↓
-
-Telegram Bot — auto notification
-
-↓
-
-Ready-to-post content for X
-
-## Sentiment Classification
-| Label | Artinya |
-|---|---|
-| 🔴 Fear | Pasar takut, tekanan jual |
-| 🟢 Greed | Pasar serakah, tekanan beli |
-| 🟡 Hope | Pasar optimis, menunggu |
-| ⚫ Panic | Pasar panik, aksi jual masif |
-| ⚪ Neutral | Pasar netral |
+TENCENT CLOUD VM (101.32.169.164)
+├── Flask App
+│ ├── /health
+│ ├── /fetch → RSS 8 sumber + Gemini AI
+│ ├── /data → artikel + sentiment
+│ ├── /sentiment → summary Fear/Greed/Hope/Panic
+│ ├── /notify → kirim Telegram + draft X
+│ ├── /ingest-ohlcv → terima OHLCV dari laptop
+│ └── /rrg?tickers= → generate RRG chart PNG
+├── PostgreSQL
+│ ├── articles (sentiment)
+│ └── ohlcv (53 tickers, LQ45)
+├── Telegram Bot (polling)
+│ ├── /rrg BBCA BBRI → RRG chart
+│ ├── /sentiment → market summary
+│ └── /fetch → ambil berita terbaru
+├── Prometheus + Grafana (monitoring)
+└── Docker Compose
 
 ## Tech Stack
-- **Flask** — REST API & RSS data collector
-- **PostgreSQL** — Historical data storage
-- **Docker & Docker Compose** — Containerization
-- **GitHub Actions** — CI/CD auto-deploy pipeline
-- **Prometheus & Grafana** — System monitoring
-- **AWS EC2** — Cloud production server
-- **Telegram Bot API** — Automated content distribution
+- **Flask** — REST API
+- **PostgreSQL** — Storage
+- **Docker Compose** — Containerization
+- **GitHub Actions** — CI/CD auto-deploy
+- **Gemini AI** — Sentiment classification
+- **Matplotlib** — RRG chart generation
+- **Prometheus + Grafana** — Monitoring
+- **Tencent Cloud** — Production server
 
-## RSS Sources
-CNBC Indonesia, Bisnis.com, Kontan, Detik Finance, IDX Channel, Investor Daily, Katadata, Republika Ekonomi
+## Telegram Bot Commands
+| Command | Fungsi |
+|---|---|
+| `/rrg BBCA BBRI BMRI` | Generate Psychological RRG chart |
+| `/sentiment` | Market sentiment summary hari ini |
+| `/fetch` | Fetch berita terbaru |
 
-## API Endpoints
-| Endpoint | Method | Description |
-|---|---|---|
-| /health | GET | System health check |
-| /fetch | GET | Fetch & analyze latest news from 8 sources |
-| /data | GET | Get articles with sentiment |
-| /sentiment | GET | Sentiment summary report |
-| /notify | GET | Send formatted sentiment report + X draft to Telegram |
-
-## Features
-- Bilingual sentiment analysis (Indonesian + English)
-- Multi-source RSS ingestion with error handling
-- Persistent PostgreSQL storage
-- Docker Compose orchestration
-- Auto-deploy on every GitHub push (CI/CD)
-- Telegram bot for daily market sentiment summary
-- Auto-generated, character-optimized content ready for X/Twitter
-- Real-time monitoring with Prometheus & Grafana
-
-## Sample Output (Telegram)
-📊 Market Pulse Monitor
-
-🗓 13 Jun 2026
-━━━━━━━━━━━━━━━
-
-DOMINANT: 🟢 GREED
-
-━━━━━━━━━━━━━━━
-🟢 Greed   : 8 berita (32%)
-
-⚪ Neutral : 12 berita (48%)
-
-🔴 Fear    : 5 berita (20%)
-📌 Interpretasi:
-
-Pasar sedang euforia. Waspadai FOMO.
-📰 Headline Terkini:
-
-Harga Emas Hari Ini Melonjak...
+## Data Pipeline
+- OHLCV: yfinance via Windows laptop → push ke server daily
+- News: 8 RSS sumber Indonesia (CNBC, Bisnis, Kontan, dll)
+- AI: Gemini 2.5 Flash untuk klasifikasi sentiment
 
 ## Roadmap
-- [x] Sentiment analysis (Fear/Greed/Hope/Panic/Neutral)
-- [x] Multi-source RSS (8 sumber Indonesia)
-- [x] Telegram bot integration
-- [ ] Scheduled cron job for daily auto-notification
-- [ ] Web dashboard for sentiment history
-- [ ] LLM integration for deeper analysis
+- [x] AI sentiment via Gemini
+- [x] Psychological RRG engine
+- [x] Telegram bot with chart
+- [x] LQ45 full coverage
+- [ ] Web dashboard (Streamlit)
+- [ ] Auto-post ke X/Twitter
+- [ ] Sektor rotation view
 
 ## Contact
 - GitHub: github.com/Rakamalik
 - LinkedIn: linkedin.com/in/imam-raka-putra-2aa603339
-# Migrated to Tencent Cloud
-# Migrated to Tencent Cloud
-# Migrated to Tencent Cloud
-# Migrated to Tencent Cloud
-# Migrated to Tencent Cloud
