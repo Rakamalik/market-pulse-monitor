@@ -406,8 +406,26 @@ def rrg_chart():
             print(f"Error {ticker}: {e}")
             continue
 
-    ax.set_xlim(70, 130)
-    ax.set_ylim(70, 130)
+    # Center berdasarkan mean data
+    all_x = []
+    all_y = []
+    for t in tickers:
+        try:
+            tail = calculate_rrg(t, benchmark_df)
+            if not tail.empty:
+                all_x += tail['x'].tolist()
+                all_y += tail['y'].tolist()
+        except:
+            pass
+
+    cx = np.mean(all_x) if all_x else 100
+    cy = np.mean(all_y) if all_y else 100
+    r = 15
+
+    ax.set_xlim(cx - r, cx + r)
+    ax.set_ylim(cy - r, cy + r)
+    ax.axhline(y=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax.axvline(x=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
     ax.set_xlabel('Logika Tren (X)', fontsize=11)
     ax.set_ylabel('Intensitas Emosi (Y)', fontsize=11)
     ax.set_title('Psychological RRG — Market Pulse Monitor', fontsize=13, pad=15)
