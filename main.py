@@ -15,6 +15,7 @@ import psycopg2
 import time
 import os
 import requests
+import numpy as np
 
 # =========================
 # 2. INIT APP
@@ -343,153 +344,121 @@ def ingest_ohlcv():
     cur.close()
     conn.close()
     return {"message": f"Saved {len(data)} rows"}
+
 @app.route("/rrg")
 def rrg_chart():
-    tickers = request.args.get('tickers', '').upper().split(',')
-    tickers = [t.strip() + '.JK' if not t.strip().endswith('.JK') and t.strip() != '^JKSE' else t.strip() for t in tickers if t.strip()]
+    tickers_raw = request.args.get('tickers', '').upper().split(',')
+    tickers = []
+    for t in tickers_raw:
+        t = t.strip()
+        if not t:
+            continue
+        if t == '^JKSE' or t == '^JKLQ45':
+            tickers.append(t)
+        elif not t.endswith('.JK'):
+            tickers.append(t + '.JK')
+        else:
+            tickers.append(t)
 
     if not tickers:
         return {"error": "No tickers provided"}, 400
 
-    try:
-        benchmark_df = get_data(BENCHMARK)
-    except Exception as e:
-        return {"error": str(e)}, 500
+    from rrg_engine import calculate_rrg_multi
+    all_results = calculate_rrg_multi(tickers)
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    ax.set_facecolor('#fafafa')
+    ticker_data = {}
+    all_x, all_y = [], []
+    for ticker, tail in all_results.items():
+        if tail is not None and not tail.empty:
+            ticker_data[ticker] = tail
+            all_x += tail['x'].tolist()
+            all_y += tail['y'].tolist()
+
+    if not ticker_data:
+        return {"error": "No data available"}, 400
+
+    # Setup figure
+    fig, ax = plt.subplots(figsize=(10, 8))
     fig.patch.set_facecolor('white')
+    ax.set_facecolor('#fafafa')
 
-    # Kuadran background
-    ax.axhspan(100, 130, xmin=0.5, xmax=1.0, alpha=0.08, color='green')
-    ax.axhspan(70, 100, xmin=0.5, xmax=1.0, alpha=0.08, color='orange')
-    ax.axhspan(100, 130, xmin=0.0, xmax=0.5, alpha=0.08, color='blue')
-    ax.axhspan(70, 100, xmin=0.0, xmax=0.5, alpha=0.08, color='red')
+    # Center selalu di 100,100 — standar RRG
+    # Range menyesuaikan data tapi tetap simetris
+    max_dist = max(
+        abs(np.max(all_x) - 100),
+        abs(np.min(all_x) - 100),
+        abs(np.max(all_y) - 100),
+        abs(np.min(all_y) - 100)
+    )
+    r = max(15, max_dist + 5)
 
-    # Label kuadran
-    ax.text(115, 127, 'LEADING', fontsize=9, color='green', alpha=0.6, ha='center')
-    ax.text(85, 127, 'IMPROVING', fontsize=9, color='blue', alpha=0.6, ha='center')
-    ax.text(115, 73, 'WEAKENING', fontsize=9, color='orange', alpha=0.6, ha='center')
-    ax.text(85, 73, 'LAGGING', fontsize=9, color='red', alpha=0.6, ha='center')
+    xmin, xmax = 100 - r, 100 + r
+    ymin, ymax = 100 - r, 100 + r
+    # Pastikan 100,100 selalu terlihat di chart
+    max_dist = max(
+        abs(np.max(all_x) - 100),
+        abs(np.min(all_x) - 100),
+        abs(np.max(all_y) - 100),
+        abs(np.min(all_y) - 100)
+    )
+    r = max(15, max_dist + 5)
+
+    xmin, xmax = 100 - r, 100 + r
+    ymin, ymax = 100 - r, 100 + r
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
+    # Background kuadran
+    ax.axhspan(100, ymax, xmin=(100-xmin)/(xmax-xmin), xmax=1.0, alpha=0.08, color='green')
+    ax.axhspan(100, ymax, xmin=0.0, xmax=(100-xmin)/(xmax-xmin), alpha=0.08, color='blue')
+    ax.axhspan(ymin, 100, xmin=(100-xmin)/(xmax-xmin), xmax=1.0, alpha=0.08, color='orange')
+    ax.axhspan(ymin, 100, xmin=0.0, xmax=(100-xmin)/(xmax-xmin), alpha=0.08, color='red')
 
     # Garis tengah
     ax.axhline(y=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
     ax.axvline(x=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
 
+    # Label kuadran
+    ax.text((100+xmax)/2, (100+ymax)/2, 'LEADING', fontsize=9, color='green', alpha=0.5, ha='center', va='center')
+    ax.text((xmin+100)/2, (100+ymax)/2, 'IMPROVING', fontsize=9, color='blue', alpha=0.5, ha='center', va='center')
+    ax.text((100+xmax)/2, (ymin+100)/2, 'WEAKENING', fontsize=9, color='orange', alpha=0.5, ha='center', va='center')
+    ax.text((xmin+100)/2, (ymin+100)/2, 'LAGGING', fontsize=9, color='red', alpha=0.5, ha='center', va='center')
+
+    # Plot ticker
     colors = ['#2a78d6','#1baf7a','#eda100','#e34948','#4a3aa7',
-              '#eb6834','#e87ba4','#008300','#BA7517','#185FA5',
-              '#3B6D11','#A32D2D','#534AB7','#0F6E56','#854F0B']
+              '#eb6834','#e87ba4','#008300','#BA7517','#534AB7']
 
-    for i, ticker in enumerate(tickers):
-        try:
-            tail = calculate_rrg(ticker, benchmark_df)
-            if tail.empty:
-                continue
-            xs = tail['x'].tolist()
-            ys = tail['y'].tolist()
-            color = colors[i % len(colors)]
-            name = ticker.replace('.JK', '')
+    for i, (ticker, tail) in enumerate(ticker_data.items()):
+        xs = tail['x'].tolist()
+        ys = tail['y'].tolist()
+        color = colors[i % len(colors)]
+        name = ticker.replace('.JK', '')
 
-            # Tail dengan transparansi
-            for j in range(len(xs)-1):
-                alpha = 0.2 + (j / len(xs)) * 0.7
-                ax.plot([xs[j], xs[j+1]], [ys[j], ys[j+1]],
-                       color=color, linewidth=1.5, alpha=alpha)
+        for j in range(len(xs)-1):
+            alpha = 0.15 + (j / len(xs)) * 0.7
+            ax.plot([xs[j], xs[j+1]], [ys[j], ys[j+1]],
+                   color=color, linewidth=2.5, alpha=alpha)
 
-            # Titik akhir
-            ax.scatter([xs[-1]], [ys[-1]], color=color, s=80,
-                      zorder=5, edgecolors='white', linewidths=1.5)
-            ax.annotate(name, (xs[-1], ys[-1]),
-                       textcoords="offset points", xytext=(6, 4),
-                       fontsize=8, color=color, fontweight='bold')
-        except Exception as e:
-            print(f"Error {ticker}: {e}")
-            continue
+        ax.scatter([xs[-1]], [ys[-1]], color=color, s=200,
+                  zorder=5, edgecolors='white', linewidths=2)
+        ax.annotate(name, (xs[-1], ys[-1]),
+                   textcoords="offset points", xytext=(8, 5),
+                   fontsize=11, color=color, fontweight='bold')
 
-    # Center berdasarkan mean data
-    all_x = []
-    all_y = []
-    for t in tickers:
-        try:
-            tail = calculate_rrg(t, benchmark_df)
-            if not tail.empty:
-                all_x += tail['x'].tolist()
-                all_y += tail['y'].tolist()
-        except:
-            pass
-
-    cx = np.mean(all_x) if all_x else 100
-    cy = np.mean(all_y) if all_y else 100
-    r = 15
-
-    ax.set_xlim(cx - r, cx + r)
-    ax.set_ylim(cy - r, cy + r)
-    ax.axhline(y=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
-    ax.axvline(x=100, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
     ax.set_xlabel('Logika Tren (X)', fontsize=11)
     ax.set_ylabel('Intensitas Emosi (Y)', fontsize=11)
-    ax.set_title('Psychological RRG — Market Pulse Monitor', fontsize=13, pad=15)
-    ax.grid(True, alpha=0.2)
+    ax.set_title('Psychological RRG — Endecapi', fontsize=13, pad=15)
+    ax.grid(True, alpha=0.15)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     buf.seek(0)
-    plt.close()
+    plt.close(fig)
 
     return send_file(buf, mimetype='image/png')
-@app.route("/telegram-webhook", methods=["POST"])
-def telegram_webhook():
-    data = request.get_json()
-    
-    if not data or "message" not in data:
-        return {"ok": True}
-    
-    message = data["message"]
-    chat_id = message["chat"]["id"]
-    text = message.get("text", "")
-    
-    token = os.environ.get("TELEGRAM_TOKEN")
-    tg_url = f"https://api.telegram.org/bot{token}"
-    
-    # Command /rrg BBCA BBRI BMRI
-    if text.startswith("/rrg"):
-        parts = text.split()
-        if len(parts) < 2:
-            requests.post(f"{tg_url}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": "Usage: /rrg BBCA BBRI BMRI"
-            })
-            return {"ok": True}
-        
-        tickers = ",".join(parts[1:])
-        
-        # Generate chart
-        chart_response = requests.get(
-            f"http://localhost:5000/rrg?tickers={tickers}"
-        )
-        
-        if chart_response.status_code == 200:
-            requests.post(f"{tg_url}/sendPhoto", files={
-                "photo": ("rrg.png", chart_response.content, "image/png")
-            }, data={
-                "chat_id": chat_id,
-                "caption": f"📊 Psychological RRG\n{tickers}"
-            })
-        else:
-            requests.post(f"{tg_url}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": f"Error: {chart_response.json()}"
-            })
-    
-    elif text.startswith("/sentiment"):
-        # Kirim sentiment summary
-        requests.post(f"{tg_url}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": "Fetching sentiment..."
-        })
-        requests.get("http://localhost:5000/notify")
-    
-    return {"ok": True}
+
 # =========================
 # 5. RUN APP
 # =========================
