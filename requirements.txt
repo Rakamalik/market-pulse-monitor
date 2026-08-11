@@ -8,3 +8,5 @@ google-genai
 matplotlib
 pandas
 numpy
+pytrends
+trendspyg
