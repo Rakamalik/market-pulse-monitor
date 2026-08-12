@@ -119,24 +119,31 @@ def send_telegram_notification(drafts):
     if not drafts:
         message = "Content Agent: tidak ada draft relevan hari ini."
     else:
-        topik_unik = list(dict.fromkeys(d['topik'] for d in drafts))
         lines = [
             "Content Agent - Draft Harian Siap",
+            f"({len(drafts)} draft, cek drafts_output.json untuk detail lengkap)",
             "",
-            f"{len(drafts)} draft dari {len(topik_unik)} topik:",
         ]
-        for t in topik_unik:
-            lines.append(f"- {t}")
-        lines.append("")
-        lines.append("Cek drafts_output.json di server untuk review lengkap sebelum publish.")
+        for i, d in enumerate(drafts, 1):
+            lines.append(f"[{i}] {d['topik']}")
+            for tv in d['ticker_validasi']:
+                if tv['verified']:
+                    arrow = "naik" if tv['pct_change_7d'] > 0 else "turun"
+                    lines.append(f"  {tv['ticker']}: Rp{tv['latest_close']:,.0f} ({tv['pct_change_7d']:+.2f}% 7d, {arrow})")
+                else:
+                    lines.append(f"  {tv['ticker']}: belum terverifikasi")
+            lines.append(f"  {d['alasan_ai']}")
+            lines.append("")
         message = "\n".join(lines)
+
+        if len(message) > 4000:
+            message = message[:3900] + "\n\n...(dipotong, cek drafts_output.json untuk lengkap)"
 
     tg_url = f"https://api.telegram.org/bot{token}/sendMessage"
     try:
         resp = requests.post(tg_url, json={
             "chat_id": chat_id,
-            "text": message,
-            
+            "text": message
         })
         if resp.status_code == 200:
             print("Notifikasi Telegram terkirim")
