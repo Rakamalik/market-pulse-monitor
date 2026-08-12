@@ -1,7 +1,6 @@
 """
 Stage 2: Financial Angle Finder
-Dari topik viral (Stage 1), AI usulkan 3 kandidat angle keuangan
-menggunakan kerangka 3-langkah.
+Ticker DIBATASI hanya dari universe 51 saham MPM.
 """
 
 from google import genai
@@ -10,22 +9,38 @@ import json
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+TICKER_UNIVERSE = [
+    "ACES.JK", "ADRO.JK", "AKRA.JK", "AMRT.JK", "ANTM.JK",
+    "ASII.JK", "BBCA.JK", "BBNI.JK", "BBRI.JK", "BBTN.JK",
+    "BMRI.JK", "BNGA.JK", "BRIS.JK", "BRPT.JK", "BSDE.JK",
+    "BUKA.JK", "BYAN.JK", "CPIN.JK", "CTRA.JK", "EMTK.JK",
+    "ESSA.JK", "EXCL.JK", "GOTO.JK", "HRUM.JK", "ICBP.JK",
+    "INCO.JK", "INDF.JK", "INKP.JK", "INTP.JK", "ITMG.JK",
+    "JSMR.JK", "KLBF.JK", "MAPI.JK", "MBMA.JK", "MDKA.JK",
+    "MEDC.JK", "MIKA.JK", "MYOR.JK", "PGAS.JK", "PGEO.JK",
+    "PTBA.JK", "PTPP.JK", "SIDO.JK", "SMGR.JK", "SRTG.JK",
+    "TBIG.JK", "TKIM.JK", "TLKM.JK", "TPIA.JK", "UNTR.JK",
+    "UNVR.JK", "WIKA.JK",
+]
+
 PROMPT_TEMPLATE = """Kamu adalah analis keuangan yang jago mencari celah/angle finansial dari topik viral non-finansial.
 
 Ikuti KERANGKA 3 LANGKAH ini secara eksplisit untuk topik di bawah:
-1. SIAPA pemain/pihak yang terlibat di topik ini? (perusahaan, sektor, individu berpengaruh, institusi)
-2. APA dampak psikologis atau ekonomi dari topik ini ke konsumen/pasar? (sentimen, kepercayaan, perilaku belanja, kebijakan)
-3. SIAPA yang berpotensi UNTUNG atau RUGI secara finansial dari dampak tersebut? (termasuk kandidat ticker saham Indonesia (.JK) jika relevan)
+1. SIAPA pemain/pihak yang terlibat di topik ini?
+2. APA dampak psikologis atau ekonomi dari topik ini ke konsumen/pasar?
+3. SIAPA yang berpotensi UNTUNG atau RUGI secara finansial dari dampak tersebut?
 
 Topik viral: {trend}
 Konteks berita: {headline}
 
-Berikan 3 KANDIDAT angle finansial berbeda (bukan cuma satu). Untuk tiap kandidat, jawab persis mengikuti kerangka 3 langkah di atas secara singkat, lalu simpulkan dengan kandidat ticker saham (jika ada) dan alasan singkat.
+ATURAN PENTING - TICKER SAHAM:
+Kamu HANYA BOLEH merekomendasikan ticker dari daftar berikut (jangan pernah menyebut ticker di luar daftar ini):
+{ticker_list}
 
-PENTING:
-- Kalau topik ini TIDAK punya celah keuangan yang masuk akal, katakan terus terang "tidak relevan" - jangan dipaksakan.
-- Jangan mengarang data. Kalau tidak yakin soal ticker/perusahaan, katakan "perlu verifikasi lebih lanjut".
-- Jawab HANYA dalam format JSON, tanpa markdown fence, dengan struktur:
+Jika TIDAK ADA satupun ticker dalam daftar di atas yang relevan dengan topik ini, set "topik_relevan": false dan kosongkan "kandidat".
+Jangan memaksakan keterkaitan yang lemah hanya demi mengisi kandidat.
+
+Jika ADA yang relevan, berikan maksimal 3 KANDIDAT angle finansial berbeda. Jawab HANYA dalam format JSON, tanpa markdown fence:
 
 {{
   "topik_relevan": true/false,
@@ -47,7 +62,12 @@ def find_financial_angle(trend, headline=""):
         return {"error": "GEMINI_API_KEY tidak ditemukan di environment"}
 
     client = genai.Client(api_key=GEMINI_API_KEY)
-    prompt = PROMPT_TEMPLATE.format(trend=trend, headline=headline or "(tidak ada headline)")
+    ticker_list_str = ", ".join(TICKER_UNIVERSE)
+    prompt = PROMPT_TEMPLATE.format(
+        trend=trend,
+        headline=headline or "(tidak ada headline)",
+        ticker_list=ticker_list_str
+    )
 
     try:
         response = client.models.generate_content(
